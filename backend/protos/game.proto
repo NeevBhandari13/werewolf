@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package game;
+
+option go_package = "/protos";
+
+service Game {
+    rpc HostGame (PlayerInfo) returns (GameInfo);
+    rpc JoinGame (JoinRequest) returns (GameInfo);
+}
+
+// info about player
+message PlayerInfo {
+    string playerId = 1; // unique ID to identify player
+    string playerName = 2; // player's display name
+    Role startingRole = 3; // player's role at start of round
+    Role endingRole = 4; // player's role at end of round
+    bool voted = 5; // boolean indicating whether player has voted
+}
+
+// game information
+message GameInfo {
+    string gameId = 1; // Unique identifier for the game
+    repeated PlayerInfo players = 2; // List of players in the game
+    GameState gameState = 3; // Current state of the game
+}
+
+// Game state information
+message GameState {
+    string gameId = 1; // The ID of the game
+    repeated PlayerInfo players = 2; // Updated list of players and their roles
+    State state = 3; // Current state of the game
+    string winner = 4; // Winning team, if determined
+}
+
+// request to join game
+message JoinRequest {
+    string gameId = 1; // The game ID or code to join
+    PlayerInfo player = 2; // Information about the joining player
+}
+
+// enum for different roles
+enum Role {
+    NONE = 0;
+    WEREWOLF = 1;
+    TROUBLEMAKER = 2;
+    ROBBER = 3;
+    VILLAGER = 4;
+}
+
+// Game states
+enum State {
+    WAITING = 0;     // Waiting for players to join
+    NIGHT_TIME = 1; // Role players doing actions
+    IN_PROGRESS = 2; // Game is currently being played
+    VOTING = 3;      // Players are voting
+    COMPLETED = 4;   // Game has ended
+}

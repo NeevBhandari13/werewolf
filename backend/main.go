@@ -1,49 +1,29 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"log"
-	"net/http"
+	"net"
 
-	"cloud.google.com/go/firestore"
-	firebase "firebase.google.com/go/v4"
-	"google.golang.org/api/option"
+	"google.golang.org/grpc"
 )
 
-var client *firestore.Client
+const (
+	port = "localhost:8080"
+)
 
 func main() {
-	// Initialize Firebase
-	ctx := context.Background()
-	opt := option.WithCredentialsFile("firebaseAdminConfig.json")
-	app, err := firebase.NewApp(ctx, nil, opt)
+	lis, err := net.Listen("tcp", port)
 	if err != nil {
-		log.Fatalf("error initializing Firebase app: %v", err)
+		log.Fatalf("failed to listen: %v", err)
 	}
 
-	// Initialize Firestore client
-	client, err = app.Firestore(ctx)
-	if err != nil {
-		log.Fatalf("error initializing Firestore: %v", err)
+	server := grpc.NewServer()
+
+	log.Printf("server listening at %v", lis.Addr())
+
+	if err := server.Serve(lis); err != nil {
+		log.Fatalf("Failed to serve: %v", err)
 	}
-	defer client.Close()
-
-	// Set up a simple HTTP server
-	http.HandleFunc("/test", testHandler)
-
-	fmt.Println("Server running on http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-func testHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
-	_, _, err := client.Collection("testCollection").Add(ctx, map[string]interface{}{
-		"message": "Hello, Firebase!",
-	})
-	if err != nil {
-		http.Error(w, "Failed to write to Firestore", http.StatusInternalServerError)
-		return
-	}
-	fmt.Fprintln(w, "Data added to Firestore!")
-}
+func (server *)
