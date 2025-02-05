@@ -22,15 +22,7 @@ message PlayerInfo {
 message GameInfo {
     string gameId = 1; // Unique identifier for the game
     repeated PlayerInfo players = 2; // List of players in the game
-    GameState gameState = 3; // Current state of the game
-}
-
-// Game state information
-message GameState {
-    string gameId = 1; // The ID of the game
-    repeated PlayerInfo players = 2; // Updated list of players and their roles
     State state = 3; // Current state of the game
-    string winner = 4; // Winning team, if determined
 }
 
 // request to join game
