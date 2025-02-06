@@ -11,6 +11,8 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"google.golang.org/api/option"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"golang.org/x/exp/rand"
 	"google.golang.org/grpc"
@@ -19,7 +21,7 @@ import (
 const (
 	port        = "localhost:8080"
 	projectID   = "werewolf-51259"
-	credentials = "/werewolf-51259-firebase-adminsdk-f27q8-5ec9287167.json"
+	credentials = "werewolf-51259-firebase-adminsdk-f27q8-5ec9287167.json"
 )
 
 func main() {
@@ -81,7 +83,7 @@ func validatePlayerInfo(player *protos.PlayerInfo) error {
 	return nil
 }
 
-func (s *Server) generateGameId() string {
+func (s *Server) generateGameId(ctx context.Context) (string, error) {
 	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	for {
 		code := make([]byte, 6)
@@ -91,15 +93,45 @@ func (s *Server) generateGameId() string {
 		}
 		gameId := string(code)
 
-		// Check if the game ID already exists
-		s.mu.Lock()
-		_, exists := s.games[gameId]
-		s.mu.Unlock()
+		// Check Firestore if this gameId already exists
+		gameRef := s.db.Collection("games").Doc(gameId)
+		_, err := gameRef.Get(ctx)
 
-		if !exists {
-			return gameId
+		// If the document does not exist, the ID is unique and can be used
+		if err != nil && status.Code(err) == codes.NotFound {
+			return gameId, nil
+		}
+
+		// If Firestore returns an error other than "NotFound", return the error
+		if err != nil {
+			return "", fmt.Errorf("failed to check game ID existence: %v", err)
 		}
 	}
+}
+
+func convertGameToGameInfo(game *Game) (*protos.GameInfo, error) {
+	if game == nil {
+		return nil, fmt.Errorf("game does not exist")
+	}
+
+	// Ensure GameId is valid
+	if game.ID == "" {
+		return nil, fmt.Errorf("missing game ID")
+	}
+
+	// Ensure Players is never nil
+	if game.Players == nil {
+		game.Players = []*protos.PlayerInfo{}
+		return nil, fmt.Errorf("game has no host")
+	}
+
+	protoResponse := &protos.GameInfo{
+		GameId:  game.ID,
+		Players: game.Players,
+		State:   game.State,
+	}
+
+	return protoResponse, nil
 }
 
 func (s *Server) HostGame(ctx context.Context, player *protos.PlayerInfo) (*protos.GameInfo, error) {
@@ -107,8 +139,12 @@ func (s *Server) HostGame(ctx context.Context, player *protos.PlayerInfo) (*prot
 		return nil, err
 	}
 
-	gameId := s.generateGameId()
+	gameId, err := s.generateGameId(ctx)
+	if err != nil {
+		return nil, err
+	}
 
+	// game data for database
 	newGame := &Game{
 		ID:      gameId,
 		Host:    player,
@@ -118,7 +154,7 @@ func (s *Server) HostGame(ctx context.Context, player *protos.PlayerInfo) (*prot
 
 	// Save game data to Firestore
 	// save to collection games, with the name gameId and the contents of newGame
-	_, err := s.db.Collection("games").Doc(gameId).Set(ctx, newGame)
+	_, err = s.db.Collection("games").Doc(gameId).Set(ctx, newGame)
 	if err != nil {
 		log.Printf("Failed to save game to Firestore: %v", err)
 		return nil, fmt.Errorf("failed to save game")
@@ -126,13 +162,10 @@ func (s *Server) HostGame(ctx context.Context, player *protos.PlayerInfo) (*prot
 
 	fmt.Printf("Game created with ID: %v and saved to Firestore\n", gameId)
 
-	// Create the response object and send to client
-	response := &protos.GameInfo{
-		GameId: gameId,
-		Players: []*protos.PlayerInfo{
-			player,
-		},
-		State: protos.State_WAITING,
+	// Create the game into a response object and send to client
+	response, err := convertGameToGameInfo(newGame)
+	if err != nil {
+		return nil, err
 	}
 	return response, nil
 }
@@ -143,35 +176,69 @@ func (s *Server) JoinGame(ctx context.Context, req *protos.JoinRequest) (*protos
 		return nil, err
 	}
 
-	// Lock for safe access to games map
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// create reference to game firestore document for games
+	// reference created outside the transaction
+	gameRef := s.db.Collection("games").Doc(req.GameId)
 
-	// Check if the game exists
-	game, exists := s.games[req.GameId]
-	if !exists {
-		return nil, fmt.Errorf("game with ID %s not found", req.GameId)
-	}
-	// Check if game is in waiting state
-	if game.State != protos.State_WAITING {
-		return nil, fmt.Errorf("game with ID %s not currently joinable", req.GameId)
-	}
-	// Check if player is already in the game
-	for _, p := range game.Players {
-		if p.PlayerId == req.Player.PlayerId {
-			return nil, fmt.Errorf("player %s is already in the game", req.Player.PlayerId)
+	err := s.db.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+		// get game's document snapshot from firestore
+		gameDoc, err := tx.Get(gameRef)
+		// Check if the game exists
+		if err != nil {
+			return fmt.Errorf("error getting game with ID: %s", req.GameId)
 		}
+
+		// decode game document into game struct
+		var game Game
+		err = gameDoc.DataTo(&game) // function decodes firestore json into game struct
+		if err != nil {
+			return fmt.Errorf("error decoding game with ID: %s", req.GameId)
+		}
+
+		// Check if game is in waiting state
+		if game.State != protos.State_WAITING {
+			return fmt.Errorf("game with ID %s not currently joinable", req.GameId)
+		}
+		// Check if player is already in the game
+		for _, p := range game.Players {
+			if p.PlayerId == req.Player.PlayerId {
+				return fmt.Errorf("player %s is already in the game", req.Player.PlayerId)
+			}
+		}
+
+		// Add player to the game
+		game.Players = append(game.Players, req.Player)
+
+		// set new players list in firestore
+		err = tx.Set(gameRef, game)
+		if err != nil {
+			return fmt.Errorf("failed to update game")
+		}
+
+		return nil
+
+	})
+
+	// verify transaction succeeded
+	if err != nil {
+		return nil, err
 	}
 
-	// Add player to the game
-	game.Players = append(game.Players, req.Player)
-
-	// Return updated game info
-	response := &protos.GameInfo{
-		GameId:  game.ID,
-		Players: game.Players,
-		State:   game.State,
+	// fetch latest game doc to return to client
+	// get game doc outside transaction
+	latestGameDoc, err := gameRef.Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error getting latest game state after transaction: %s", err)
 	}
-	return response, nil
+
+	var updatedGame Game
+	if err := latestGameDoc.DataTo(&updatedGame); err != nil {
+		return nil, fmt.Errorf("error decoding updated game data: %s", err)
+	}
+	updatedGameResponse, err := convertGameToGameInfo(&updatedGame)
+	if err != nil {
+		return nil, err
+	}
+	return updatedGameResponse, nil
 
 }
