@@ -185,6 +185,7 @@ func (s *Server) JoinGame(ctx context.Context, req *protos.JoinRequest) (*protos
 		gameDoc, err := tx.Get(gameRef)
 		// Check if the game exists
 		if err != nil {
+			log.Printf("Error retrieving game: %v", err)
 			return fmt.Errorf("error getting game with ID: %s", req.GameId)
 		}
 
@@ -192,8 +193,11 @@ func (s *Server) JoinGame(ctx context.Context, req *protos.JoinRequest) (*protos
 		var game Game
 		err = gameDoc.DataTo(&game) // function decodes firestore json into game struct
 		if err != nil {
+			log.Printf("Error decoding Firestore game data: %v", err)
 			return fmt.Errorf("error decoding game with ID: %s", req.GameId)
 		}
+
+		log.Printf("Game successfully retrieved from Firestore and decoded: %+v", game)
 
 		// Check if game is in waiting state
 		if game.State != protos.State_WAITING {
@@ -212,6 +216,7 @@ func (s *Server) JoinGame(ctx context.Context, req *protos.JoinRequest) (*protos
 		// set new players list in firestore
 		err = tx.Set(gameRef, game)
 		if err != nil {
+			log.Printf("Error updating Firestore with new player: %v", err)
 			return fmt.Errorf("failed to update game")
 		}
 

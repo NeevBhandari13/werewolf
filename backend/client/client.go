@@ -24,9 +24,9 @@ func main() {
 
 	// Host a new game
 	hostPlayer := &protos.PlayerInfo{
-		PlayerId:     "host123",
+		PlayerId:     "1",
 		PlayerName:   "Host Player",
-		StartingRole: protos.Role_VILLAGER,
+		StartingRole: protos.Role_NONE,
 	}
 	gameResponse, err := client.HostGame(context.Background(), hostPlayer)
 	if err != nil {
@@ -38,9 +38,9 @@ func main() {
 
 	// Join the game
 	joinPlayer := &protos.PlayerInfo{
-		PlayerId:     "player456",
+		PlayerId:     "456",
 		PlayerName:   "Joining Player",
-		StartingRole: protos.Role_WEREWOLF,
+		StartingRole: protos.Role_NONE,
 	}
 
 	joinReq := &protos.JoinRequest{
