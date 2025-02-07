@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"sync"
 	"time"
 	"werewolf/protos"
 
@@ -40,9 +39,7 @@ func main() {
 
 	grpcServer := grpc.NewServer()
 	gameServer := &Server{
-		games: make(map[string]*Game),
-		mu:    sync.Mutex{},
-		db:    client, // Firestore client
+		db: client, // Firestore client
 	}
 
 	protos.RegisterGameServer(grpcServer, gameServer)
@@ -65,9 +62,7 @@ type Game struct {
 // the gRPC server
 type Server struct {
 	protos.UnimplementedGameServer
-	games map[string]*Game  // In-memory store for games
-	mu    sync.Mutex        // Mutex to protect concurrent access to the games map
-	db    *firestore.Client // Firestore client
+	db *firestore.Client // Firestore client
 }
 
 func validatePlayerInfo(player *protos.PlayerInfo) error {
