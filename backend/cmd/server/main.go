@@ -16,7 +16,7 @@ import (
 const (
 	port        = "localhost:8080"
 	projectID   = "werewolf-51259"
-	credentials = "/Users/neevbhandari/Projects/werewolf/backend/werewolf-51259-firebase-adminsdk-f27q8-5ec9287167.json"
+	credentials = "werewolf-51259-firebase-adminsdk-f27q8-5ec9287167.json"
 )
 
 func main() {
