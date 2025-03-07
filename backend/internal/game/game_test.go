@@ -1,16 +1,16 @@
 package game
 
 import (
+	"context"
 	"testing"
 	"werewolf/protos"
 
+	"cloud.google.com/go/firestore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
-
-type FirestoreMock struct {
-	mock.Mock
-}
 
 func TestValidatePlayerInfo(t *testing.T) {
 
@@ -43,6 +43,67 @@ func TestValidatePlayerInfo(t *testing.T) {
 
 }
 
-func TestGenerateGameId(t *testing.T) {
+// MockFirestoreClient mocks FirestoreClientInterface
+type MockFirestoreClient struct {
+	mock.Mock
+}
 
+func (m *MockFirestoreClient) Collection(name string) FirestoreCollectionInterface {
+	args := m.Called(name)
+	return args.Get(0).(FirestoreCollectionInterface)
+}
+
+// MockCollection mocks FirestoreCollectionInterface
+type MockCollection struct {
+	mock.Mock
+}
+
+func (m *MockCollection) Doc(id string) FirestoreDocInterface {
+	args := m.Called(id)
+	return args.Get(0).(FirestoreDocInterface)
+}
+
+// MockDocument mocks FirestoreDocInterface
+type MockDocument struct {
+	mock.Mock
+}
+
+func (m *MockDocument) Get(ctx context.Context) (*firestore.DocumentSnapshot, error) {
+	args := m.Called(ctx)
+	return nil, args.Error(1)
+}
+
+func (m *MockDocument) Set(ctx context.Context, game *Game) (*firestore.DocumentSnapshot, error) {
+	args := m.Called(ctx)
+	return nil, args.Error(1)
+}
+
+func TestGenerateGameId(t *testing.T) {
+	ctx := context.Background()
+
+	mockDB := new(MockFirestoreClient)
+	mockCollection := new(MockCollection)
+	mockDocument := new(MockDocument)
+
+	mockDB.On("Collection", "games").Return(mockCollection)
+	mockCollection.On("Doc", mock.Anything).Return(mockDocument)
+
+	// Simulate the first call: Game ID exists (i.e., Get returns a valid document) so we have to retry
+	mockDocument.On("Get", ctx).Return(nil, nil).Once() // No error means the ID exists
+
+	// Simulate the second call: Game ID does not exist (i.e., Get returns NotFound error)
+	mockDocument.On("Get", ctx).Return(nil, status.Error(codes.NotFound, "not found"))
+
+	// Call generateGameId to check if it retries generating a new ID
+	gameID, err := generateGameId(ctx, mockDB)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(gameID) != 6 {
+		t.Fatalf("expected game ID of length 6, got %v", gameID)
+	}
+
+	// Verify that the mock calls were made as expected
+	mockDocument.AssertExpectations(t)
 }

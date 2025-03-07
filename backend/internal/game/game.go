@@ -34,7 +34,23 @@ func ValidatePlayerInfo(player *protos.PlayerInfo) error {
 	return nil
 }
 
-func generateGameId(ctx context.Context, db *firestore.Client) (string, error) {
+// FirestoreClientInterface allows us to mock Firestore
+type FirestoreClientInterface interface {
+	Collection(name string) FirestoreCollectionInterface
+}
+
+// FirestoreCollectionInterface for mocking Firestore collections
+type FirestoreCollectionInterface interface {
+	Doc(id string) FirestoreDocInterface
+}
+
+// FirestoreDocInterface for mocking Firestore documents
+type FirestoreDocInterface interface {
+	Get(ctx context.Context) (*firestore.DocumentSnapshot, error)
+	Set(ctx context.Context, game *Game) (*firestore.DocumentSnapshot, error)
+}
+
+func generateGameId(ctx context.Context, db FirestoreClientInterface) (string, error) {
 	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	for {
 		code := make([]byte, 6)
@@ -45,7 +61,9 @@ func generateGameId(ctx context.Context, db *firestore.Client) (string, error) {
 		gameId := string(code)
 
 		// Check Firestore if this gameId already exists
-		gameRef := db.Collection("games").Doc(gameId)
+		gameRef := db.Collection("games").Doc(gameId) // this creates a reference (like a pointer) to
+		// the document so we dont have to keep querying firestore to get it and can instead just
+		// use the reference we have already created
 		_, err := gameRef.Get(ctx)
 
 		// If the document does not exist, the ID is unique and can be used
@@ -60,7 +78,7 @@ func generateGameId(ctx context.Context, db *firestore.Client) (string, error) {
 	}
 }
 
-func CreateGame(ctx context.Context, db *firestore.Client, player *protos.PlayerInfo) (*Game, error) {
+func CreateGame(ctx context.Context, db FirestoreClientInterface, player *protos.PlayerInfo) (*Game, error) {
 	if err := ValidatePlayerInfo(player); err != nil {
 		return nil, err
 	}
