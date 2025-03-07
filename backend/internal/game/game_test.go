@@ -107,3 +107,40 @@ func TestGenerateGameId(t *testing.T) {
 	// Verify that the mock calls were made as expected
 	mockDocument.AssertExpectations(t)
 }
+
+func TestCreateGame(t *testing.T) {
+	ctx := context.Background()
+
+	// Mock dependencies
+	mockDB := new(MockFirestoreClient)
+	mockCollection := new(MockCollection)
+	mockDocument := new(MockDocument)
+
+	// Set up expectations
+	mockDB.On("Collection", "games").Return(mockCollection)
+	mockCollection.On("Doc", mock.Anything).Return(mockDocument)
+
+	// ensure generation of game runs smoothly
+	// Simulate Firestore behavior: Game does not exist
+	mockDocument.On("Get", ctx).Return(nil, status.Error(codes.NotFound, "not found"))
+	mockDocument.On("Set", ctx, mock.Anything).Return(nil, nil) // can return nil as does not matter for this function
+
+	// Test case: valid player info
+	validPlayer := &protos.PlayerInfo{
+		PlayerName: "John",
+		PlayerId:   "24",
+	}
+
+	// Call CreateGame for valid case
+	game, err := CreateGame(ctx, mockDB, validPlayer)
+	assert.Nil(t, err)
+	assert.NotNil(t, game)
+	assert.Equal(t, "24", game.Host.PlayerId)
+
+	// Test case: Invalid player info
+	invalidPlayer := &protos.PlayerInfo{PlayerName: "Bob"}
+
+	// Call CreateGame for invalid case
+	_, err = CreateGame(ctx, mockDB, invalidPlayer)
+	assert.NotNil(t, err) // Should return an error because PlayerId is missing
+}
