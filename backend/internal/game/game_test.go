@@ -5,11 +5,11 @@ import (
 	"testing"
 	"werewolf/protos"
 
-	"cloud.google.com/go/firestore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"werewolf/internal/mocks"
 )
 
 func TestValidatePlayerInfo(t *testing.T) {
@@ -43,47 +43,12 @@ func TestValidatePlayerInfo(t *testing.T) {
 
 }
 
-// MockFirestoreClient mocks FirestoreClientInterface
-type MockFirestoreClient struct {
-	mock.Mock
-}
-
-func (m *MockFirestoreClient) Collection(name string) FirestoreCollectionInterface {
-	args := m.Called(name)
-	return args.Get(0).(FirestoreCollectionInterface)
-}
-
-// MockCollection mocks FirestoreCollectionInterface
-type MockCollection struct {
-	mock.Mock
-}
-
-func (m *MockCollection) Doc(id string) FirestoreDocInterface {
-	args := m.Called(id)
-	return args.Get(0).(FirestoreDocInterface)
-}
-
-// MockDocument mocks FirestoreDocInterface
-type MockDocument struct {
-	mock.Mock
-}
-
-func (m *MockDocument) Get(ctx context.Context) (*firestore.DocumentSnapshot, error) {
-	args := m.Called(ctx)
-	return nil, args.Error(1)
-}
-
-func (m *MockDocument) Set(ctx context.Context, game *Game) (*firestore.DocumentSnapshot, error) {
-	args := m.Called(ctx)
-	return nil, args.Error(1)
-}
-
 func TestGenerateGameId(t *testing.T) {
 	ctx := context.Background()
 
-	mockDB := new(MockFirestoreClient)
-	mockCollection := new(MockCollection)
-	mockDocument := new(MockDocument)
+	mockDB := new(mocks.MockFirestoreClient)
+	mockCollection := new(mocks.MockCollection)
+	mockDocument := new(mocks.MockDocument)
 
 	mockDB.On("Collection", "games").Return(mockCollection)
 	mockCollection.On("Doc", mock.Anything).Return(mockDocument)
@@ -112,9 +77,9 @@ func TestCreateGame(t *testing.T) {
 	ctx := context.Background()
 
 	// Mock dependencies
-	mockDB := new(MockFirestoreClient)
-	mockCollection := new(MockCollection)
-	mockDocument := new(MockDocument)
+	mockDB := new(mocks.MockFirestoreClient)
+	mockCollection := new(mocks.MockCollection)
+	mockDocument := new(mocks.MockDocument)
 
 	// Set up expectations
 	mockDB.On("Collection", "games").Return(mockCollection)

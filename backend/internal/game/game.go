@@ -5,21 +5,14 @@ import (
 	"fmt"
 	"log"
 	"time"
+	"werewolf/internal/interfaces"
+	"werewolf/internal/structs"
 	"werewolf/protos"
 
-	"cloud.google.com/go/firestore"
 	"golang.org/x/exp/rand"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-// A single game session
-type Game struct {
-	ID      string
-	Host    *protos.PlayerInfo
-	Players []*protos.PlayerInfo
-	State   protos.State // Game state: WAITING, IN_PROGRESS, etc.
-}
 
 func ValidatePlayerInfo(player *protos.PlayerInfo) error {
 	if player == nil {
@@ -34,23 +27,7 @@ func ValidatePlayerInfo(player *protos.PlayerInfo) error {
 	return nil
 }
 
-// FirestoreClientInterface allows us to mock Firestore
-type FirestoreClientInterface interface {
-	Collection(name string) FirestoreCollectionInterface
-}
-
-// FirestoreCollectionInterface for mocking Firestore collections
-type FirestoreCollectionInterface interface {
-	Doc(id string) FirestoreDocInterface
-}
-
-// FirestoreDocInterface for mocking Firestore documents
-type FirestoreDocInterface interface {
-	Get(ctx context.Context) (*firestore.DocumentSnapshot, error)
-	Set(ctx context.Context, game *Game) (*firestore.DocumentSnapshot, error)
-}
-
-func generateGameId(ctx context.Context, db FirestoreClientInterface) (string, error) {
+func generateGameId(ctx context.Context, db interfaces.FirestoreClientInterface) (string, error) {
 	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	for {
 		code := make([]byte, 6)
@@ -78,7 +55,7 @@ func generateGameId(ctx context.Context, db FirestoreClientInterface) (string, e
 	}
 }
 
-func CreateGame(ctx context.Context, db FirestoreClientInterface, player *protos.PlayerInfo) (*Game, error) {
+func CreateGame(ctx context.Context, db interfaces.FirestoreClientInterface, player *protos.PlayerInfo) (*structs.Game, error) {
 	if err := ValidatePlayerInfo(player); err != nil {
 		return nil, err
 	}
@@ -89,7 +66,7 @@ func CreateGame(ctx context.Context, db FirestoreClientInterface, player *protos
 	}
 
 	// game data for database
-	newGame := &Game{
+	newGame := &structs.Game{
 		ID:      gameId,
 		Host:    player,
 		Players: []*protos.PlayerInfo{player}, // Add the host as the first player

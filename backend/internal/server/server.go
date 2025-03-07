@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"werewolf/internal/game"
+	"werewolf/internal/structs"
 	"werewolf/protos"
 
 	"cloud.google.com/go/firestore"
@@ -19,7 +20,7 @@ func NewGameServer(db *firestore.Client) *GameServer {
 	return &GameServer{db: db}
 }
 
-func convertGameToProtoResponse(game *game.Game) (*protos.GameInfo, error) {
+func convertGameToProtoResponse(game *structs.Game) (*protos.GameInfo, error) {
 	if game == nil {
 		return nil, fmt.Errorf("game does not exist")
 	}
@@ -80,7 +81,7 @@ func (s *GameServer) JoinGame(ctx context.Context, req *protos.JoinRequest) (*pr
 		}
 
 		// decode game document into game struct
-		var game game.Game
+		var game structs.Game
 		err = gameDoc.DataTo(&game) // function decodes firestore json into game struct
 		if err != nil {
 			log.Printf("Error decoding Firestore game data: %v", err)
@@ -126,7 +127,7 @@ func (s *GameServer) JoinGame(ctx context.Context, req *protos.JoinRequest) (*pr
 		return nil, fmt.Errorf("error getting latest game state after transaction: %s", err)
 	}
 
-	var updatedGame game.Game
+	var updatedGame structs.Game
 	if err := latestGameDoc.DataTo(&updatedGame); err != nil {
 		return nil, fmt.Errorf("error decoding updated game data: %s", err)
 	}
