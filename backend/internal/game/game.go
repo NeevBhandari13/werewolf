@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log"
 	"time"
-	"werewolf/internal/interfaces"
 	"werewolf/internal/structs"
 	"werewolf/protos"
 
+	"cloud.google.com/go/firestore"
 	"golang.org/x/exp/rand"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -27,7 +27,7 @@ func ValidatePlayerInfo(player *protos.PlayerInfo) error {
 	return nil
 }
 
-func generateGameId(ctx context.Context, db interfaces.FirestoreClientInterface) (string, error) {
+func generateGameId(ctx context.Context, db *firestore.Client) (string, error) {
 	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	for {
 		code := make([]byte, 6)
@@ -38,9 +38,7 @@ func generateGameId(ctx context.Context, db interfaces.FirestoreClientInterface)
 		gameId := string(code)
 
 		// Check Firestore if this gameId already exists
-		gameRef := db.Collection("games").Doc(gameId) // this creates a reference (like a pointer) to
-		// the document so we dont have to keep querying firestore to get it and can instead just
-		// use the reference we have already created
+		gameRef := db.Collection("games").Doc(gameId)
 		_, err := gameRef.Get(ctx)
 
 		// If the document does not exist, the ID is unique and can be used
@@ -55,7 +53,7 @@ func generateGameId(ctx context.Context, db interfaces.FirestoreClientInterface)
 	}
 }
 
-func CreateGame(ctx context.Context, db interfaces.FirestoreClientInterface, player *protos.PlayerInfo) (*structs.Game, error) {
+func CreateGame(ctx context.Context, db *firestore.Client, player *protos.PlayerInfo) (*structs.Game, error) {
 	if err := ValidatePlayerInfo(player); err != nil {
 		return nil, err
 	}

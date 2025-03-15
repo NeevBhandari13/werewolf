@@ -7,5 +7,5 @@ type Game struct {
 	ID      string
 	Host    *protos.PlayerInfo
 	Players []*protos.PlayerInfo
-	State   protos.State // Game state: WAITING, IN_PROGRESS, etc.
+	State   protos.State // Game state: WAITING, INPROGRESS, etc.
 }
